@@ -1,0 +1,50 @@
+services:
+  minio:
+    image: bitnami/minio:latest
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_DEFAULT_BUCKETS: ${AVATARS_BUCKET}
+    volumes:
+      - ~/minio/data:/data
+    healthcheck:
+      # Esto es un workaround para que el healthcheck funcione en docker
+      # Ya que si le pasamos variables de entorno no las reconoce por alguna razon
+      # Este healthcheck solo funcionara si el puerto de minio es el 9000
+      # Si en .env cambias el puerto de minio, cambia el puerto aqui tambien
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    ports:
+    - ${MINIO_PORT}:${MINIO_PORT}
+    - ${MINIO_WEB_PORT}:${MINIO_WEB_PORT}
+
+  api:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: production
+    depends_on:
+      minio:
+        condition: service_healthy
+    tty: true
+    command: ['/bin/sh', '/usr/src/app/bin/start-prod.sh']
+    environment:
+      - APP_HOST=${APP_HOST}
+      - APP_PORT=${APP_PORT}
+      - MINIO_HOST=${MINIO_HOST}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - AVATARS_BUCKET=${AVATARS_BUCKET}
+      - DEFAULT_AVATAR_FILENAME=${DEFAULT_AVATAR_FILENAME}
+    volumes:
+      - /usr/src/app/node_modules
+      - .:/usr/src/app
+    ports:
+      - ${APP_PORT}:${APP_PORT}
+
+networks:
+  default:
+    name: healthy-next-network
